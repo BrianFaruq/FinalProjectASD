@@ -1,0 +1,2 @@
+semester_berikutnya=ganjil
+lulus=RPL,PDAS,PLAN,AOK,SO,KAL,AL,UNKNOWN_CODE
