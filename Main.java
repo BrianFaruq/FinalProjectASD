@@ -56,6 +56,10 @@ class CourseCatalog {
         return even;
     }
 
+    public String[] getKodes() {
+        return kodes;
+    }
+
     public int getTotalNodes() {
         return odd.length + even.length;
     }
@@ -238,6 +242,29 @@ class EnrollmentChecker {
         return false;
     }
 
+    private static boolean isAvailable(Node node, CourseCatalog catalog, String[] effectiveLulus, int effectiveCount) {
+        if (contains(effectiveLulus, effectiveCount, node.kode)) {
+            return false;
+        }
+
+        if (node.kode.equals("SKR")) {
+            String[] allKodes = catalog.getKodes();
+            for (int i = 0; i < allKodes.length; i++) {
+                if (allKodes[i] != null && !allKodes[i].equals("SKR")) {
+                    if (!contains(effectiveLulus, effectiveCount, allKodes[i])) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student) {
         int maxCourses = catalog.getTotalNodes();
         String[] effectiveLulus = new String[maxCourses];
@@ -267,27 +294,17 @@ class EnrollmentChecker {
 
         int availableCount = 0;
         for (int i = 0; i < semesterArray.length; i++) {
-            Node node = semesterArray[i];
-            if (contains(effectiveLulus, effectiveCount, node.kode)) {
-                continue;
+            if (isAvailable(semesterArray[i], catalog, effectiveLulus, effectiveCount)) {
+                availableCount++;
             }
-            if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
-                continue;
-            }
-            availableCount++;
         }
 
         Node[] available = new Node[availableCount];
         int idx = 0;
         for (int i = 0; i < semesterArray.length; i++) {
-            Node node = semesterArray[i];
-            if (contains(effectiveLulus, effectiveCount, node.kode)) {
-                continue;
+            if (isAvailable(semesterArray[i], catalog, effectiveLulus, effectiveCount)) {
+                available[idx++] = semesterArray[i];
             }
-            if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
-                continue;
-            }
-            available[idx++] = node;
         }
 
         return available;
