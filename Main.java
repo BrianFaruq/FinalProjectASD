@@ -24,7 +24,7 @@ class Node {
     String nama;
     int sks;
     int semester;
-    Node prev; // Pointer ke matakuliah prasyarat, null jika tidak ada
+    Node prev; 
 
     public Node(String kode, String nama, int sks, int semester) {
         this.kode = kode;
@@ -40,7 +40,7 @@ class CourseCatalog {
     private final Node[] even;
     private final String[] kodes;
     private final int[][] kodeToIndices;
-    private int[][] adj; // Adjacency list: prasyarat -> matakuliah
+    private int[][] adj;
 
     public CourseCatalog(Node[] odd, Node[] even, String[] kodes, int[][] kodeToIndices) {
         this.odd = odd;
@@ -102,9 +102,6 @@ class CourseCatalog {
 class CsvLoader {
 
     public static CourseCatalog load(String matakuliahPath, String prasyaratPath) throws IOException {
-        // =========================================================================
-        // PASS 1: Hitung jumlah baris/elemen matakuliah
-        // =========================================================================
         BufferedReader br1 = Files.newBufferedReader(Paths.get(matakuliahPath));
         br1.readLine(); // Lewati header: Kode;Nama;sks;semester;ganjil/genap
 
@@ -129,7 +126,6 @@ class CsvLoader {
         }
         br1.close();
 
-        // Alokasi array eksak (tanpa generic / collections)
         Node[] odd = new Node[oddCount];
         Node[] even = new Node[evenCount];
         String[] kodes = new String[totalCourses];
@@ -139,9 +135,6 @@ class CsvLoader {
             kodeToIndices[i][1] = -1;
         }
 
-        // =========================================================================
-        // PASS 2: Isi data matakuliah ke dalam array
-        // =========================================================================
         BufferedReader br2 = Files.newBufferedReader(Paths.get(matakuliahPath));
         br2.readLine(); // Lewati header
 
@@ -174,9 +167,6 @@ class CsvLoader {
 
         CourseCatalog catalog = new CourseCatalog(odd, even, kodes, kodeToIndices);
 
-        // =========================================================================
-        // PASS 3: Hitung out-degree untuk setiap node pada prasyarat.csv
-        // =========================================================================
         int totalNodes = catalog.getTotalNodes();
         int[] outDegree = new int[totalNodes];
 
@@ -196,16 +186,12 @@ class CsvLoader {
         }
         brCount.close();
 
-        // Alokasi 2D array graf (adj) dengan ukuran pas
         int[][] adj = new int[totalNodes][];
         for (int i = 0; i < totalNodes; i++) {
             adj[i] = new int[outDegree[i]];
         }
         int[] edgePtr = new int[totalNodes];
 
-        // =========================================================================
-        // PASS 4: Isi relasi graf dan pointer prev
-        // =========================================================================
         BufferedReader brFill = Files.newBufferedReader(Paths.get(prasyaratPath));
         brFill.readLine(); // Lewati header
 
@@ -253,7 +239,7 @@ class CsvLoader {
 
 class StudentData {
     String semesterBerikutnya;
-    String[] lulus; // Array standard String[]
+    String[] lulus;
 
     public StudentData(String semesterBerikutnya, String[] lulus) {
         this.semesterBerikutnya = semesterBerikutnya;
@@ -297,12 +283,10 @@ class EnrollmentChecker {
     }
 
     public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student) {
-        // Alokasi array String[] untuk menampung matakuliah yang lulus dan rantai prasyaratnya
         int maxCourses = catalog.getTotalNodes();
         String[] effectiveLulus = new String[maxCourses];
         int effectiveCount = 0;
 
-        // 1. Masukkan matakuliah yang lulus langsung dari file mahasiswa
         for (int i = 0; i < student.lulus.length; i++) {
             String k = student.lulus[i];
             if (!contains(effectiveLulus, effectiveCount, k)) {
@@ -310,7 +294,6 @@ class EnrollmentChecker {
             }
         }
 
-        // 2. Telusuri seluruh rantai SLL ke belakang (node.prev mundur hingga null)
         for (int i = 0; i < student.lulus.length; i++) {
             Node[] nodes = catalog.getNodesByKode(student.lulus[i]);
             for (int j = 0; j < nodes.length; j++) {
@@ -324,10 +307,8 @@ class EnrollmentChecker {
             }
         }
 
-        // 3. Tentukan array semester yang akan dipindai (odd atau even)
         Node[] semesterArray = student.semesterBerikutnya.equals("ganjil") ? catalog.getOdd() : catalog.getEven();
 
-        // Pass 1: Hitung berapa matakuliah yang memenuhi syarat
         int availableCount = 0;
         for (int i = 0; i < semesterArray.length; i++) {
             Node node = semesterArray[i];
@@ -339,8 +320,7 @@ class EnrollmentChecker {
             }
             availableCount++;
         }
-
-        // Pass 2: Isi array Node[] available berukuran eksak
+ 
         Node[] available = new Node[availableCount];
         int idx = 0;
         for (int i = 0; i < semesterArray.length; i++) {
