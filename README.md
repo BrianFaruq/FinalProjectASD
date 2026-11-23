@@ -38,9 +38,10 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
 1. **Filter Paritas Semester**: Hanya mata kuliah yang sesuai dengan `semester_berikutnya` (atau bertipe `Keduanya`) yang dipertimbangkan.
 2. **Eliminasi Mata Kuliah yang Sudah Lulus**: Mata kuliah yang sudah pernah diselesaikan tidak akan ditawarkan kembali.
 3. **Penelusuran Rantai Prasyarat Mundur (*Backward Branched SLL Traversal*)**:
-   - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) sudah pasti terpenuhi.
+   - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) **sudah pasti terpenuhi**.
    - Oleh karena itu, seluruh mata kuliah dalam rantai prasyarat tersebut otomatis di-*omit* (dieliminasi) agar tidak ditawarkan kembali.
 4. **Verifikasi Prasyarat Langsung**: Mata kuliah baru hanya ditawarkan apabila prasyarat langsungnya (`node.prev`) sudah berstatus lulus atau terpenuhi dalam rantai prasyarat.
+5. **Aturan Khusus Skripsi (`SKR`)**: Skripsi hanya dapat diambil jika mahasiswa telah menyelesaikan seluruh mata kuliah lain dalam kurikulum.
 
 ---
 
@@ -65,10 +66,10 @@ Untuk memenuhi kaidah murni Struktur Data:
 - Tidak menggunakan `java.util.Set`, `java.util.HashSet`
 - Tidak menggunakan `java.util.Map`, `java.util.HashMap`
 - Tidak ada tipe parameter generik `<T>`
-- Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, `int[][]`, serta pointer objek.
+- Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, serta pointer objek.
 
 ### 2. Representasi Struktur Data: Branched Singly Linked List (SLL)
-Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly Linked List (Inverted Tree)**, bukan graf adjacency list:
+Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly Linked List (Inverted Tree)**:
 - **Node Singly Linked List (SLL)**:
   ```java
   class Node {
@@ -82,22 +83,19 @@ Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly 
 - **Karakteristik Branched SLL**:
   - Setiap node mata kuliah memiliki tepat satu pointer `prev` yang menunjuk mundur ke prasyaratnya (atau `null` jika tidak memiliki prasyarat).
   - Beberapa mata kuliah lanjutan dapat merujuk ke satu prasyarat yang sama (misalnya `JK` dan `IMK` keduanya menunjuk ke `SO`), membentuk percabangan struktur pohon terbalik (*branched list*).
-  - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `prev` sampai bernilai `null`. Struktur ini meniadakan kebutuhan akan matriks ketetanggaan (*adjacency matrix*) maupun daftar ketetanggaan (*adjacency list*).
+  - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `prev` sampai bernilai `null`.
 
 - **Katalog Terpisah (Paritas Semester)**:
   - `Node[] odd`: Menampung mata kuliah semester ganjil.
   - `Node[] even`: Menampung mata kuliah semester genap.
+  - `String[] kodes`: Menampung daftar seluruh kode unik mata kuliah kurikulum.
   - Mata kuliah `Keduanya` (misal `SKR`) diinstansiasi menjadi 2 node identik: satu masuk ke `odd`, satu masuk ke `even`.
 
-- **Tabel Pemetaan Kode ke Index 2D Array (`kodeToIndices`)**:
-  - `String[] kodes`: Menyimpan kode unik mata kuliah.
-  - `int[][] kodeToIndices`: Array 2D berukuran $N \times 2$. Kolom 0 menyimpan indeks global pertama, dan kolom 1 menyimpan indeks kedua jika mata kuliah bertipe `Keduanya`.
-
 ### 3. Teknik *Two-Pass Scanning* (Alokasi Ukuran Eksak)
-Untuk menghindari alokasi dinamis atau kapasitas yang ditebak, pembacaan file dilakukan dalam 2 putaran:
+Untuk menghindari alokasi dinamis atau kapasitas yang ditebak, pembacaan file dilakukan dalam putaran terstruktur:
 1. **Pass 1 (`matakuliah.csv`)**: Memindai file untuk menghitung jumlah total mata kuliah unik, jumlah ganjil, dan jumlah genap.
-2. **Alokasi**: Mengalokasikan `Node[] odd`, `Node[] even`, `String[] kodes`, dan `int[][] kodeToIndices` dengan ukuran 100% presisi (*exact sizing*).
-3. **Pass 2 (`matakuliah.csv`)**: Membaca ulang berkas untuk membuat objek `Node` dan mengisi tabel pemetaan.
+2. **Alokasi**: Mengalokasikan `Node[] odd`, `Node[] even`, dan `String[] kodes` dengan ukuran 100% presisi (*exact sizing*).
+3. **Pass 2 (`matakuliah.csv`)**: Membaca ulang berkas untuk membuat objek `Node` dan mengisinya ke array `odd` dan `even`.
 4. **Pass 3 (`prasyarat.csv`)**: Membaca file prasyarat satu kali putaran untuk menghubungkan pointer `mkNode.prev = prasyaratNode`.
 
 ### 4. Algoritma Pengecekan Ketersediaan (*Enrollment Checker*)
@@ -115,7 +113,11 @@ flowchart TD
     UseEven --> ScanLoop
     ScanLoop --> CheckPassed{Ada di effectiveLulus?}
     CheckPassed -->|Ya| SkipCourse[Lewati / Omit]
-    CheckPassed -->|Tidak| CheckPrereq{Punya prasyarat prev?}
+    CheckPassed -->|Tidak| CheckSKR{Mata kuliah SKR?}
+    CheckSKR -->|Ya| CheckAllPassed{Semua matakuliah lain sudah lulus?}
+    CheckAllPassed -->|Tidak| SkipCourse
+    CheckAllPassed -->|Ya| CheckPrereq{Punya prasyarat prev?}
+    CheckSKR -->|Tidak| CheckPrereq
     CheckPrereq -->|Tidak| AddAvail[Masukkan ke Available]
     CheckPrereq -->|Ya| PrereqMet{prev.kode ada di effectiveLulus?}
     PrereqMet -->|Ya| AddAvail
@@ -164,7 +166,7 @@ lulus=APS,DAA,JK,IMK,KA,KALJ
 **Output Terminal:**
 ```text
 Semester berikutnya: ganjil
-Matakuliah yang dapat diambil (13):
+Matakuliah yang dapat diambil (12):
  1. PKK    Pengenalan Keilmuan Komputer               2 sks  (smt 1)
  2. STP    Statistik dan Teori Peluang                2 sks  (smt 1)
  3. AGM    Agama                                      2 sks  (smt 1)
@@ -177,16 +179,5 @@ Matakuliah yang dapat diambil (13):
 10. MPPI   Metodologi Penelitian dan Penulisan Ilmiah 3 sks  (smt 5)
 11. BIND   Bahasa Indonesia                           2 sks  (smt 5)
 12. PKL    Praktik Kerja Lapangan                     4 sks  (smt 7)
-13. SKR    Skripsi                                    6 sks  (smt 8)
-Total: 37 sks
+Total: 31 sks
 ```
-
-### Penjelasan Kasus Uji:
-- Mahasiswa telah lulus `DAA`, `APS`, `JK`, `IMK`, `KA`, `KALJ`.
-- Rantai mundur prasyarat yang otomatis terpenuhi & di-*omit*:
-  - `APS` $\rightarrow$ `RPL` $\rightarrow$ `null` di-*omit*.
-  - `DAA` $\rightarrow$ `ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS` $\rightarrow$ `null` semuanya di-*omit*.
-  - `JK` & `IMK` $\rightarrow$ `SO` $\rightarrow$ `AOK` $\rightarrow$ `null` semuanya di-*omit*.
-  - `KALJ` & `KA` $\rightarrow$ `AL` $\rightarrow$ `KAL` $\rightarrow$ `null` semuanya di-*omit*.
-- Matakuliah semester 1 yang ditawarkan murni hanya yang belum pernah diambil dan tidak masuk rantai prasyarat di atas (`PKK`, `STP`, `AGM`).
-- Matakuliah semester 3 seperti `MN` ditawarkan karena prasyaratnya (`AL`) telah terpenuhi lewat kelulusan `KA`/`KALJ`.

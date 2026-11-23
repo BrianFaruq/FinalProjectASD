@@ -39,13 +39,11 @@ class CourseCatalog {
     private final Node[] odd;
     private final Node[] even;
     private final String[] kodes;
-    private final int[][] kodeToIndices;
 
-    public CourseCatalog(Node[] odd, Node[] even, String[] kodes, int[][] kodeToIndices) {
+    public CourseCatalog(Node[] odd, Node[] even, String[] kodes) {
         this.odd = odd;
         this.even = even;
         this.kodes = kodes;
-        this.kodeToIndices = kodeToIndices;
     }
 
     public Node[] getOdd() {
@@ -60,37 +58,31 @@ class CourseCatalog {
         return kodes;
     }
 
-    public int getTotalNodes() {
-        return odd.length + even.length;
-    }
-
-    public Node getNodeByGlobalIndex(int idx) {
-        if (idx < odd.length) {
-            return odd[idx];
-        } else {
-            return even[idx - odd.length];
-        }
-    }
-
-    public int[] getGlobalIndices(String kode) {
-        for (int i = 0; i < kodes.length; i++) {
-            if (kode.equals(kodes[i])) {
-                if (kodeToIndices[i][1] != -1) {
-                    return new int[] { kodeToIndices[i][0], kodeToIndices[i][1] };
-                }
-                return new int[] { kodeToIndices[i][0] };
+    public Node[] getNodesByKode(String kode) {
+        Node nOdd = null;
+        for (int i = 0; i < odd.length; i++) {
+            if (odd[i].kode.equals(kode)) {
+                nOdd = odd[i];
+                break;
             }
         }
-        return new int[0];
-    }
-
-    public Node[] getNodesByKode(String kode) {
-        int[] indices = getGlobalIndices(kode);
-        Node[] nodes = new Node[indices.length];
-        for (int i = 0; i < indices.length; i++) {
-            nodes[i] = getNodeByGlobalIndex(indices[i]);
+        Node nEven = null;
+        for (int i = 0; i < even.length; i++) {
+            if (even[i].kode.equals(kode)) {
+                nEven = even[i];
+                break;
+            }
         }
-        return nodes;
+        if (nOdd != null && nEven != null) {
+            return new Node[] { nOdd, nEven };
+        }
+        if (nOdd != null) {
+            return new Node[] { nOdd };
+        }
+        if (nEven != null) {
+            return new Node[] { nEven };
+        }
+        return new Node[0];
     }
 }
 
@@ -124,17 +116,13 @@ class CsvLoader {
         Node[] odd = new Node[oddCount];
         Node[] even = new Node[evenCount];
         String[] kodes = new String[totalCourses];
-        int[][] kodeToIndices = new int[totalCourses][2];
-        for (int i = 0; i < totalCourses; i++) {
-            kodeToIndices[i][0] = -1;
-            kodeToIndices[i][1] = -1;
-        }
 
         BufferedReader br2 = Files.newBufferedReader(Paths.get(matakuliahPath));
         br2.readLine();
 
         int oddIdx = 0;
         int evenIdx = 0;
+        int kodeIdx = 0;
 
         while ((line = br2.readLine()) != null) {
             String[] parts = line.split(";");
@@ -144,23 +132,20 @@ class CsvLoader {
             int semester = Integer.parseInt(parts[3]);
             String tipe = parts[4];
 
-            if (tipe.equals("Keduanya")) {
-                odd[oddIdx] = new Node(kode, nama, sks, semester);
-                registerKodeIndex(kodes, kodeToIndices, kode, oddIdx++);
+            kodes[kodeIdx++] = kode;
 
-                even[evenIdx] = new Node(kode, nama, sks, semester);
-                registerKodeIndex(kodes, kodeToIndices, kode, oddCount + evenIdx++);
+            if (tipe.equals("Keduanya")) {
+                odd[oddIdx++] = new Node(kode, nama, sks, semester);
+                even[evenIdx++] = new Node(kode, nama, sks, semester);
             } else if (tipe.equals("Ganjil")) {
-                odd[oddIdx] = new Node(kode, nama, sks, semester);
-                registerKodeIndex(kodes, kodeToIndices, kode, oddIdx++);
+                odd[oddIdx++] = new Node(kode, nama, sks, semester);
             } else if (tipe.equals("Genap")) {
-                even[evenIdx] = new Node(kode, nama, sks, semester);
-                registerKodeIndex(kodes, kodeToIndices, kode, oddCount + evenIdx++);
+                even[evenIdx++] = new Node(kode, nama, sks, semester);
             }
         }
         br2.close();
 
-        CourseCatalog catalog = new CourseCatalog(odd, even, kodes, kodeToIndices);
+        CourseCatalog catalog = new CourseCatalog(odd, even, kodes);
 
         BufferedReader brPrasyarat = Files.newBufferedReader(Paths.get(prasyaratPath));
         brPrasyarat.readLine();
@@ -181,19 +166,6 @@ class CsvLoader {
         brPrasyarat.close();
 
         return catalog;
-    }
-
-    private static void registerKodeIndex(String[] kodes, int[][] kodeToIndices, String kode, int globalIdx) {
-        for (int i = 0; i < kodes.length; i++) {
-            if (kode.equals(kodes[i])) {
-                kodeToIndices[i][1] = globalIdx;
-                return;
-            } else if (kodes[i] == null) {
-                kodes[i] = kode;
-                kodeToIndices[i][0] = globalIdx;
-                return;
-            }
-        }
     }
 }
 
@@ -250,10 +222,8 @@ class EnrollmentChecker {
         if (node.kode.equals("SKR")) {
             String[] allKodes = catalog.getKodes();
             for (int i = 0; i < allKodes.length; i++) {
-                if (allKodes[i] != null && !allKodes[i].equals("SKR")) {
-                    if (!contains(effectiveLulus, effectiveCount, allKodes[i])) {
-                        return false;
-                    }
+                if (!allKodes[i].equals("SKR") && !contains(effectiveLulus, effectiveCount, allKodes[i])) {
+                    return false;
                 }
             }
         }
@@ -266,7 +236,7 @@ class EnrollmentChecker {
     }
 
     public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student) {
-        int maxCourses = catalog.getTotalNodes();
+        int maxCourses = catalog.getKodes().length;
         String[] effectiveLulus = new String[maxCourses];
         int effectiveCount = 0;
 
