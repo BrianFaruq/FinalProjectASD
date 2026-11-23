@@ -2,7 +2,7 @@
 
 Sistem penentu ketersediaan mata kuliah (*Course Enrollment Checker*) berbasis **Algoritma dan Struktur Data (ASD)**. Program ini menganalisis katalog mata kuliah kurikulum, ketergantungan prasyarat, serta rekam jejak akademik mahasiswa untuk menentukan mata kuliah apa saja yang memenuhi syarat (*eligible*) untuk diambil pada semester berikutnya.
 
-Proyek ini dibangun secara khusus dengan paradigma **murni array standar Java** (tanpa pustaka koleksi generik seperti `ArrayList`, `HashSet`, `HashMap`), menggunakan struktur data **Branched Singly Linked List (SLL)** di mana setiap node mata kuliah menyimpan pointer `.prev` yang menunjuk mundur ke mata kuliah prasyaratnya.
+Proyek ini dibangun secara khusus dengan paradigma **murni array standar Java** (tanpa pustaka koleksi generik seperti `ArrayList`, `HashSet`, `HashMap`), menggunakan struktur data **Branched Singly Linked List (SLL)** di mana setiap node mata kuliah menyimpan pointer `prev` yang menunjuk mundur ke mata kuliah prasyaratnya.
 
 ---
 
@@ -38,7 +38,7 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
 1. **Filter Paritas Semester**: Hanya mata kuliah yang sesuai dengan `semester_berikutnya` (atau bertipe `Keduanya`) yang dipertimbangkan.
 2. **Eliminasi Mata Kuliah yang Sudah Lulus**: Mata kuliah yang sudah pernah diselesaikan tidak akan ditawarkan kembali.
 3. **Penelusuran Rantai Prasyarat Mundur (*Backward Branched SLL Traversal*)**:
-   - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) **sudah pasti terpenuhi**.
+   - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) sudah pasti terpenuhi.
    - Oleh karena itu, seluruh mata kuliah dalam rantai prasyarat tersebut otomatis di-*omit* (dieliminasi) agar tidak ditawarkan kembali.
 4. **Verifikasi Prasyarat Langsung**: Mata kuliah baru hanya ditawarkan apabila prasyarat langsungnya (`node.prev`) sudah berstatus lulus atau terpenuhi dalam rantai prasyarat.
 
@@ -46,26 +46,26 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
 
 ## 🛠️ Penjelasan Teknis (Technical Details)
 
-Program diimplementasikan dalam satu berkas mandiri (`Main.java`) dengan pemisahan tanggung jawab antarkelas:
+Program diimplementasikan dalam satu berkas mandiri (`Main.java`) dengan struktur kelas:
 
 ```text
 Main.java
-├── public class Main        // Titik masuk program (wiring & eksekusi)
-├── class Node               // Node SLL mata kuliah (pointer prev ke prasyarat)
-├── class CourseCatalog      // Penyimpan array Ganjil/Genap dan tabel lookup
-├── class CsvLoader          // Parser CSV dengan teknik Two-Pass Scanning & SLL linking
-├── class StudentData        // Struktur data penampung info mahasiswa
-├── class StudentFile        // Parser file mahasiswa mhs_XX.txt
-└── class EnrollmentChecker  // Logika backward traversal SLL dan penyaringan ketersediaan
+├── public class Main
+├── class Node
+├── class CourseCatalog
+├── class CsvLoader
+├── class StudentData
+├── class StudentFile
+└── class EnrollmentChecker
 ```
 
 ### 1. Kepatuhan Bebas Koleksi Java (*No Java Collections / Generics*)
 Untuk memenuhi kaidah murni Struktur Data:
-- ❌ Tidak menggunakan `java.util.List`, `java.util.ArrayList`
-- ❌ Tidak menggunakan `java.util.Set`, `java.util.HashSet`
-- ❌ Tidak menggunakan `java.util.Map`, `java.util.HashMap`
-- ❌ Tidak ada tipe parameter generik `<T>`
-- ✅ Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, `int[][]`, serta pointer objek.
+- Tidak menggunakan `java.util.List`, `java.util.ArrayList`
+- Tidak menggunakan `java.util.Set`, `java.util.HashSet`
+- Tidak menggunakan `java.util.Map`, `java.util.HashMap`
+- Tidak ada tipe parameter generik `<T>`
+- Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, `int[][]`, serta pointer objek.
 
 ### 2. Representasi Struktur Data: Branched Singly Linked List (SLL)
 Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly Linked List (Inverted Tree)**, bukan graf adjacency list:
@@ -76,13 +76,13 @@ Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly 
       String nama;
       int sks;
       int semester;
-      Node prev; // Pointer ke prasyarat langsung (mundur hingga null)
+      Node prev;
   }
   ```
 - **Karakteristik Branched SLL**:
-  - Setiap node mata kuliah memiliki tepat satu pointer `.prev` yang menunjuk mundur ke prasyaratnya (atau `null` jika tidak memiliki prasyarat).
+  - Setiap node mata kuliah memiliki tepat satu pointer `prev` yang menunjuk mundur ke prasyaratnya (atau `null` jika tidak memiliki prasyarat).
   - Beberapa mata kuliah lanjutan dapat merujuk ke satu prasyarat yang sama (misalnya `JK` dan `IMK` keduanya menunjuk ke `SO`), membentuk percabangan struktur pohon terbalik (*branched list*).
-  - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `.prev` sampai bernilai `null`. Struktur ini menghilangkan kebutuhan akan matriks ketetanggaan (*adjacency matrix*) maupun daftar ketetanggaan (*adjacency list*).
+  - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `prev` sampai bernilai `null`. Struktur ini meniadakan kebutuhan akan matriks ketetanggaan (*adjacency matrix*) maupun daftar ketetanggaan (*adjacency list*).
 
 - **Katalog Terpisah (Paritas Semester)**:
   - `Node[] odd`: Menampung mata kuliah semester ganjil.

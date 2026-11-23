@@ -94,7 +94,7 @@ class CsvLoader {
 
     public static CourseCatalog load(String matakuliahPath, String prasyaratPath) throws IOException {
         BufferedReader br1 = Files.newBufferedReader(Paths.get(matakuliahPath));
-        br1.readLine(); // Lewati header: Kode;Nama;sks;semester;ganjil/genap
+        br1.readLine();
 
         int totalCourses = 0;
         int oddCount = 0;
@@ -116,6 +116,7 @@ class CsvLoader {
             }
         }
         br1.close();
+
         Node[] odd = new Node[oddCount];
         Node[] even = new Node[evenCount];
         String[] kodes = new String[totalCourses];
@@ -124,8 +125,9 @@ class CsvLoader {
             kodeToIndices[i][0] = -1;
             kodeToIndices[i][1] = -1;
         }
+
         BufferedReader br2 = Files.newBufferedReader(Paths.get(matakuliahPath));
-        br2.readLine(); // Lewati header
+        br2.readLine();
 
         int oddIdx = 0;
         int evenIdx = 0;
@@ -155,8 +157,9 @@ class CsvLoader {
         br2.close();
 
         CourseCatalog catalog = new CourseCatalog(odd, even, kodes, kodeToIndices);
+
         BufferedReader brPrasyarat = Files.newBufferedReader(Paths.get(prasyaratPath));
-        brPrasyarat.readLine(); // Lewati header: prasyarat;matakuliah
+        brPrasyarat.readLine();
 
         while ((line = brPrasyarat.readLine()) != null) {
             String[] parts = line.split(";");
@@ -192,7 +195,7 @@ class CsvLoader {
 
 class StudentData {
     String semesterBerikutnya;
-    String[] lulus; // Array standard String[]
+    String[] lulus;
 
     public StudentData(String semesterBerikutnya, String[] lulus) {
         this.semesterBerikutnya = semesterBerikutnya;
@@ -239,12 +242,14 @@ class EnrollmentChecker {
         int maxCourses = catalog.getTotalNodes();
         String[] effectiveLulus = new String[maxCourses];
         int effectiveCount = 0;
+
         for (int i = 0; i < student.lulus.length; i++) {
             String k = student.lulus[i];
             if (!contains(effectiveLulus, effectiveCount, k)) {
                 effectiveLulus[effectiveCount++] = k;
             }
         }
+
         for (int i = 0; i < student.lulus.length; i++) {
             Node[] nodes = catalog.getNodesByKode(student.lulus[i]);
             for (int j = 0; j < nodes.length; j++) {
@@ -257,6 +262,7 @@ class EnrollmentChecker {
                 }
             }
         }
+
         Node[] semesterArray = student.semesterBerikutnya.equals("ganjil") ? catalog.getOdd() : catalog.getEven();
 
         int availableCount = 0;
@@ -270,6 +276,7 @@ class EnrollmentChecker {
             }
             availableCount++;
         }
+
         Node[] available = new Node[availableCount];
         int idx = 0;
         for (int i = 0; i < semesterArray.length; i++) {
