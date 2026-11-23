@@ -1,6 +1,5 @@
 import java.io.*;
 import java.nio.file.*;
-import java.util.*;
 
 public class Main {
     public static void main(String[] args) {
@@ -11,7 +10,7 @@ public class Main {
         try {
             CourseCatalog catalog = CsvLoader.load(matakuliahPath, prasyaratPath);
             StudentData student = StudentFile.load(studentPath);
-            List<Node> available = EnrollmentChecker.getAvailableCourses(catalog, student);
+            Node[] available = EnrollmentChecker.getAvailableCourses(catalog, student);
             EnrollmentChecker.printAvailableCourses(student, available);
         } catch (Exception e) {
             System.err.println("Terjadi kesalahan: " + e.getMessage());
@@ -41,7 +40,7 @@ class CourseCatalog {
     private final Node[] even;
     private final String[] kodes;
     private final int[][] kodeToIndices;
-    private int[][] adj;
+    private int[][] adj; // Adjacency list: prasyarat -> matakuliah
 
     public CourseCatalog(Node[] odd, Node[] even, String[] kodes, int[][] kodeToIndices) {
         this.odd = odd;
@@ -103,7 +102,9 @@ class CourseCatalog {
 class CsvLoader {
 
     public static CourseCatalog load(String matakuliahPath, String prasyaratPath) throws IOException {
-        // Pass 1: Hitung jumlah baris/kategori
+        // =========================================================================
+        // PASS 1: Hitung jumlah baris/elemen matakuliah
+        // =========================================================================
         BufferedReader br1 = Files.newBufferedReader(Paths.get(matakuliahPath));
         br1.readLine(); // Lewati header: Kode;Nama;sks;semester;ganjil/genap
 
@@ -128,7 +129,7 @@ class CsvLoader {
         }
         br1.close();
 
-        // Alokasi array sesuai ukuran eksak
+        // Alokasi array eksak (tanpa generic / collections)
         Node[] odd = new Node[oddCount];
         Node[] even = new Node[evenCount];
         String[] kodes = new String[totalCourses];
@@ -138,7 +139,9 @@ class CsvLoader {
             kodeToIndices[i][1] = -1;
         }
 
-        // Pass 2: Isi data matakuliah
+        // =========================================================================
+        // PASS 2: Isi data matakuliah ke dalam array
+        // =========================================================================
         BufferedReader br2 = Files.newBufferedReader(Paths.get(matakuliahPath));
         br2.readLine(); // Lewati header
 
@@ -171,46 +174,66 @@ class CsvLoader {
 
         CourseCatalog catalog = new CourseCatalog(odd, even, kodes, kodeToIndices);
 
-        // Pass 3: Parse prasyarat.csv
+        // =========================================================================
+        // PASS 3: Hitung out-degree untuk setiap node pada prasyarat.csv
+        // =========================================================================
         int totalNodes = catalog.getTotalNodes();
-        @SuppressWarnings("unchecked")
-        List<Integer>[] adjList = new List[totalNodes];
-        for (int i = 0; i < totalNodes; i++) {
-            adjList[i] = new ArrayList<>();
-        }
+        int[] outDegree = new int[totalNodes];
 
-        BufferedReader br3 = Files.newBufferedReader(Paths.get(prasyaratPath));
-        br3.readLine(); // Lewati header: prasyarat;matakuliah
+        BufferedReader brCount = Files.newBufferedReader(Paths.get(prasyaratPath));
+        brCount.readLine(); // Lewati header: prasyarat;matakuliah
 
-        while ((line = br3.readLine()) != null) {
+        while ((line = brCount.readLine()) != null) {
             String[] parts = line.split(";");
             String prasyaratKode = parts[0];
             String matakuliahKode = parts[1];
 
-            Node prasyaratNode = catalog.getNodesByKode(prasyaratKode)[0];
-            for (Node mkNode : catalog.getNodesByKode(matakuliahKode)) {
-                mkNode.prev = prasyaratNode;
+            int[] srcIndices = catalog.getGlobalIndices(prasyaratKode);
+            int[] dstIndices = catalog.getGlobalIndices(matakuliahKode);
+            for (int i = 0; i < srcIndices.length; i++) {
+                outDegree[srcIndices[i]] += dstIndices.length;
+            }
+        }
+        brCount.close();
+
+        // Alokasi 2D array graf (adj) dengan ukuran pas
+        int[][] adj = new int[totalNodes][];
+        for (int i = 0; i < totalNodes; i++) {
+            adj[i] = new int[outDegree[i]];
+        }
+        int[] edgePtr = new int[totalNodes];
+
+        // =========================================================================
+        // PASS 4: Isi relasi graf dan pointer prev
+        // =========================================================================
+        BufferedReader brFill = Files.newBufferedReader(Paths.get(prasyaratPath));
+        brFill.readLine(); // Lewati header
+
+        while ((line = brFill.readLine()) != null) {
+            String[] parts = line.split(";");
+            String prasyaratKode = parts[0];
+            String matakuliahKode = parts[1];
+
+            Node[] prasyaratNodes = catalog.getNodesByKode(prasyaratKode);
+            Node[] matakuliahNodes = catalog.getNodesByKode(matakuliahKode);
+
+            Node prasyaratNode = prasyaratNodes[0];
+            for (int i = 0; i < matakuliahNodes.length; i++) {
+                matakuliahNodes[i].prev = prasyaratNode;
             }
 
             int[] srcIndices = catalog.getGlobalIndices(prasyaratKode);
             int[] dstIndices = catalog.getGlobalIndices(matakuliahKode);
-            for (int src : srcIndices) {
-                for (int dst : dstIndices) {
-                    adjList[src].add(dst);
+            for (int i = 0; i < srcIndices.length; i++) {
+                int src = srcIndices[i];
+                for (int j = 0; j < dstIndices.length; j++) {
+                    adj[src][edgePtr[src]++] = dstIndices[j];
                 }
             }
         }
-        br3.close();
+        brFill.close();
 
-        int[][] adj = new int[totalNodes][];
-        for (int i = 0; i < totalNodes; i++) {
-            adj[i] = new int[adjList[i].size()];
-            for (int j = 0; j < adjList[i].size(); j++) {
-                adj[i][j] = adjList[i].get(j);
-            }
-        }
         catalog.setAdj(adj);
-
         return catalog;
     }
 
@@ -230,9 +253,9 @@ class CsvLoader {
 
 class StudentData {
     String semesterBerikutnya;
-    Set<String> lulus;
+    String[] lulus; // Array standard String[]
 
-    public StudentData(String semesterBerikutnya, Set<String> lulus) {
+    public StudentData(String semesterBerikutnya, String[] lulus) {
         this.semesterBerikutnya = semesterBerikutnya;
         this.lulus = lulus;
     }
@@ -242,22 +265,20 @@ class StudentFile {
     public static StudentData load(String path) throws IOException {
         BufferedReader br = Files.newBufferedReader(Paths.get(path));
 
-        // Format terjamin:
-        // Baris 1: semester_berikutnya=...
-        // Baris 2: lulus=...
         String line1 = br.readLine();
         String semesterBerikutnya = line1.split("=")[1];
 
-        Set<String> lulus = new HashSet<>();
+        String[] lulus;
         String line2 = br.readLine();
         if (line2 != null && line2.contains("=")) {
             String[] parts = line2.split("=");
             if (parts.length > 1 && !parts[1].isEmpty()) {
-                String[] courses = parts[1].split(",");
-                for (String c : courses) {
-                    lulus.add(c);
-                }
+                lulus = parts[1].split(",");
+            } else {
+                lulus = new String[0];
             }
+        } else {
+            lulus = new String[0];
         }
         br.close();
 
@@ -266,45 +287,83 @@ class StudentFile {
 }
 
 class EnrollmentChecker {
-    public static List<Node> getAvailableCourses(CourseCatalog catalog, StudentData student) {
-        Set<String> effectiveLulus = new HashSet<>(student.lulus);
+    private static boolean contains(String[] arr, int length, String target) {
+        for (int i = 0; i < length; i++) {
+            if (target.equals(arr[i])) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-        // Menelusuri seluruh rantai SLL ke belakang (prev hingga null)
-        for (String kodeLulus : student.lulus) {
-            for (Node n : catalog.getNodesByKode(kodeLulus)) {
-                Node curr = n.prev;
+    public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student) {
+        // Alokasi array String[] untuk menampung matakuliah yang lulus dan rantai prasyaratnya
+        int maxCourses = catalog.getTotalNodes();
+        String[] effectiveLulus = new String[maxCourses];
+        int effectiveCount = 0;
+
+        // 1. Masukkan matakuliah yang lulus langsung dari file mahasiswa
+        for (int i = 0; i < student.lulus.length; i++) {
+            String k = student.lulus[i];
+            if (!contains(effectiveLulus, effectiveCount, k)) {
+                effectiveLulus[effectiveCount++] = k;
+            }
+        }
+
+        // 2. Telusuri seluruh rantai SLL ke belakang (node.prev mundur hingga null)
+        for (int i = 0; i < student.lulus.length; i++) {
+            Node[] nodes = catalog.getNodesByKode(student.lulus[i]);
+            for (int j = 0; j < nodes.length; j++) {
+                Node curr = nodes[j].prev;
                 while (curr != null) {
-                    effectiveLulus.add(curr.kode);
+                    if (!contains(effectiveLulus, effectiveCount, curr.kode)) {
+                        effectiveLulus[effectiveCount++] = curr.kode;
+                    }
                     curr = curr.prev;
                 }
             }
         }
 
-        Node[] array = student.semesterBerikutnya.equals("ganjil") ? catalog.getOdd() : catalog.getEven();
-        List<Node> available = new ArrayList<>();
+        // 3. Tentukan array semester yang akan dipindai (odd atau even)
+        Node[] semesterArray = student.semesterBerikutnya.equals("ganjil") ? catalog.getOdd() : catalog.getEven();
 
-        for (Node node : array) {
-            // Sudah lulus atau prasyaratnya terpenuhi dalam rantai -> omit
-            if (effectiveLulus.contains(node.kode)) {
+        // Pass 1: Hitung berapa matakuliah yang memenuhi syarat
+        int availableCount = 0;
+        for (int i = 0; i < semesterArray.length; i++) {
+            Node node = semesterArray[i];
+            if (contains(effectiveLulus, effectiveCount, node.kode)) {
                 continue;
             }
-            // Jika memiliki prasyarat, pastikan sudah terpenuhi
-            if (node.prev != null && !effectiveLulus.contains(node.prev.kode)) {
+            if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
                 continue;
             }
-            available.add(node);
+            availableCount++;
+        }
+
+        // Pass 2: Isi array Node[] available berukuran eksak
+        Node[] available = new Node[availableCount];
+        int idx = 0;
+        for (int i = 0; i < semesterArray.length; i++) {
+            Node node = semesterArray[i];
+            if (contains(effectiveLulus, effectiveCount, node.kode)) {
+                continue;
+            }
+            if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
+                continue;
+            }
+            available[idx++] = node;
         }
 
         return available;
     }
 
-    public static void printAvailableCourses(StudentData student, List<Node> available) {
+    public static void printAvailableCourses(StudentData student, Node[] available) {
         System.out.println("Semester berikutnya: " + student.semesterBerikutnya);
-        System.out.println("Matakuliah yang dapat diambil (" + available.size() + "):");
+        System.out.println("Matakuliah yang dapat diambil (" + available.length + "):");
 
         int totalSks = 0;
-        for (int i = 0; i < available.size(); i++) {
-            Node n = available.get(i);
+        for (int i = 0; i < available.length; i++) {
+            Node n = available[i];
             totalSks += n.sks;
             System.out.printf("%2d. %-6s %-42s %d sks  (smt %d)\n",
                     (i + 1), n.kode, n.nama, n.sks, n.semester);
