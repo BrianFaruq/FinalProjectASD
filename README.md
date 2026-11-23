@@ -1,8 +1,8 @@
 # Course Enrollment Availability Checker (Sistem Rekomendasi Rencana Studi)
 
-Sistem penentu ketersediaan mata kuliah (*Course Enrollment Checker*) berbasis **Algoritma dan Struktur Data (ASD)**. Program ini menganalisis katalog mata kuliah kurikulum, graf ketergantungan prasyarat, serta rekam jejak akademik mahasiswa untuk menentukan mata kuliah apa saja yang memenuhi syarat (*eligible*) untuk diambil pada semester berikutnya.
+Sistem penentu ketersediaan mata kuliah (*Course Enrollment Checker*) berbasis **Algoritma dan Struktur Data (ASD)**. Program ini menganalisis katalog mata kuliah kurikulum, ketergantungan prasyarat, serta rekam jejak akademik mahasiswa untuk menentukan mata kuliah apa saja yang memenuhi syarat (*eligible*) untuk diambil pada semester berikutnya.
 
-Proyek ini dibangun secara khusus dengan paradigma **murni array standar Java** (tanpa pustaka koleksi generik seperti `ArrayList`, `HashSet`, `HashMap`), menggunakan struktur data *Singly Linked List* (SLL) dan graf *Adjacency List* 2D array.
+Proyek ini dibangun secara khusus dengan paradigma **murni array standar Java** (tanpa pustaka koleksi generik seperti `ArrayList`, `HashSet`, `HashMap`), menggunakan struktur data **Branched Singly Linked List (SLL)** di mana setiap node mata kuliah menyimpan pointer `.prev` yang menunjuk mundur ke mata kuliah prasyaratnya.
 
 ---
 
@@ -21,7 +21,7 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
   PLAN;Pemrograman Lanjut;5;2;Genap
   SKR;Skripsi;6;8;Keduanya
   ```
-- **`prasyarat.csv`**: Relasi ketergantungan graf prasyarat dengan format:
+- **`prasyarat.csv`**: Relasi ketergantungan prasyarat dengan format:
   ```text
   prasyarat;matakuliah
   PDAS;PLAN
@@ -37,7 +37,7 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
 ### Aturan Bisnis & Logika Akademik
 1. **Filter Paritas Semester**: Hanya mata kuliah yang sesuai dengan `semester_berikutnya` (atau bertipe `Keduanya`) yang dipertimbangkan.
 2. **Eliminasi Mata Kuliah yang Sudah Lulus**: Mata kuliah yang sudah pernah diselesaikan tidak akan ditawarkan kembali.
-3. **Penelusuran Rantai Prasyarat Mundur (*Backward SLL Traversal*)**:
+3. **Penelusuran Rantai Prasyarat Mundur (*Backward Branched SLL Traversal*)**:
    - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) **sudah pasti terpenuhi**.
    - Oleh karena itu, seluruh mata kuliah dalam rantai prasyarat tersebut otomatis di-*omit* (dieliminasi) agar tidak ditawarkan kembali.
 4. **Verifikasi Prasyarat Langsung**: Mata kuliah baru hanya ditawarkan apabila prasyarat langsungnya (`node.prev`) sudah berstatus lulus atau terpenuhi dalam rantai prasyarat.
@@ -52,11 +52,11 @@ Program diimplementasikan dalam satu berkas mandiri (`Main.java`) dengan pemisah
 Main.java
 ├── public class Main        // Titik masuk program (wiring & eksekusi)
 ├── class Node               // Node SLL mata kuliah (pointer prev ke prasyarat)
-├── class CourseCatalog      // Penyimpan array Ganjil/Genap, lookup tabel, dan graf
-├── class CsvLoader          // Parser CSV dengan teknik Two-Pass Scanning
+├── class CourseCatalog      // Penyimpan array Ganjil/Genap dan tabel lookup
+├── class CsvLoader          // Parser CSV dengan teknik Two-Pass Scanning & SLL linking
 ├── class StudentData        // Struktur data penampung info mahasiswa
 ├── class StudentFile        // Parser file mahasiswa mhs_XX.txt
-└── class EnrollmentChecker  // Logika backward traversal dan penyaringan ketersediaan
+└── class EnrollmentChecker  // Logika backward traversal SLL dan penyaringan ketersediaan
 ```
 
 ### 1. Kepatuhan Bebas Koleksi Java (*No Java Collections / Generics*)
@@ -67,7 +67,8 @@ Untuk memenuhi kaidah murni Struktur Data:
 - ❌ Tidak ada tipe parameter generik `<T>`
 - ✅ Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, `int[][]`, serta pointer objek.
 
-### 2. Representasi Struktur Data
+### 2. Representasi Struktur Data: Branched Singly Linked List (SLL)
+Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly Linked List (Inverted Tree)**, bukan graf adjacency list:
 - **Node Singly Linked List (SLL)**:
   ```java
   class Node {
@@ -75,26 +76,29 @@ Untuk memenuhi kaidah murni Struktur Data:
       String nama;
       int sks;
       int semester;
-      Node prev; // Menunjuk ke mata kuliah prasyarat langsung (mundur hingga null)
+      Node prev; // Pointer ke prasyarat langsung (mundur hingga null)
   }
   ```
+- **Karakteristik Branched SLL**:
+  - Setiap node mata kuliah memiliki tepat satu pointer `.prev` yang menunjuk mundur ke prasyaratnya (atau `null` jika tidak memiliki prasyarat).
+  - Beberapa mata kuliah lanjutan dapat merujuk ke satu prasyarat yang sama (misalnya `JK` dan `IMK` keduanya menunjuk ke `SO`), membentuk percabangan struktur pohon terbalik (*branched list*).
+  - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `.prev` sampai bernilai `null`. Struktur ini menghilangkan kebutuhan akan matriks ketetanggaan (*adjacency matrix*) maupun daftar ketetanggaan (*adjacency list*).
+
 - **Katalog Terpisah (Paritas Semester)**:
   - `Node[] odd`: Menampung mata kuliah semester ganjil.
   - `Node[] even`: Menampung mata kuliah semester genap.
   - Mata kuliah `Keduanya` (misal `SKR`) diinstansiasi menjadi 2 node identik: satu masuk ke `odd`, satu masuk ke `even`.
+
 - **Tabel Pemetaan Kode ke Index 2D Array (`kodeToIndices`)**:
   - `String[] kodes`: Menyimpan kode unik mata kuliah.
   - `int[][] kodeToIndices`: Array 2D berukuran $N \times 2$. Kolom 0 menyimpan indeks global pertama, dan kolom 1 menyimpan indeks kedua jika mata kuliah bertipe `Keduanya`.
-- **Graf Prasyarat (*Jagged 2D Array*)**:
-  - `int[][] adj`: Representasi graf berarah (*directed graph*) `prasyarat -> matakuliah`. Setiap baris `adj[i]` dialokasikan persis sesuai *out-degree* dari simpul `i`.
 
 ### 3. Teknik *Two-Pass Scanning* (Alokasi Ukuran Eksak)
-Untuk menghindari alokasi memori dinamis (`ArrayList`) atau *hardcoded capacity*, pembacaan file dilakukan dalam 2 putaran (*two-pass*):
+Untuk menghindari alokasi dinamis atau kapasitas yang ditebak, pembacaan file dilakukan dalam 2 putaran:
 1. **Pass 1 (`matakuliah.csv`)**: Memindai file untuk menghitung jumlah total mata kuliah unik, jumlah ganjil, dan jumlah genap.
 2. **Alokasi**: Mengalokasikan `Node[] odd`, `Node[] even`, `String[] kodes`, dan `int[][] kodeToIndices` dengan ukuran 100% presisi (*exact sizing*).
 3. **Pass 2 (`matakuliah.csv`)**: Membaca ulang berkas untuk membuat objek `Node` dan mengisi tabel pemetaan.
-4. **Pass 3 (`prasyarat.csv`)**: Menghitung derajat keluar (*out-degree*) tiap node.
-5. **Pass 4 (`prasyarat.csv`)**: Mengalokasikan array 2D `adj` dan menghubungkan pointer `node.prev` ke node prasyaratnya.
+4. **Pass 3 (`prasyarat.csv`)**: Membaca file prasyarat satu kali putaran untuk menghubungkan pointer `mkNode.prev = prasyaratNode`.
 
 ### 4. Algoritma Pengecekan Ketersediaan (*Enrollment Checker*)
 
@@ -103,7 +107,7 @@ flowchart TD
     Start([Mulai]) --> ReadStudent[Baca Data Mahasiswa]
     ReadStudent --> CollectPassed[Kumpulkan Matakuliah Lulus ke effectiveLulus]
     CollectPassed --> BackwardTraversal[Untuk setiap matakuliah lulus:<br/>Telusuri pointer prev mundur hingga null]
-    BackwardTraversal --> MarkAncestors[Tandai seluruh rantai prasyarat sebagai terpenuhi]
+    BackwardTraversal --> MarkAncestors[Tandai seluruh rantai SLL prasyarat sebagai terpenuhi]
     MarkAncestors --> SelectArray{semester_berikutnya?}
     SelectArray -->|ganjil| UseOdd[Pilih odd array]
     SelectArray -->|genap| UseEven[Pilih even array]
@@ -180,9 +184,9 @@ Total: 37 sks
 ### Penjelasan Kasus Uji:
 - Mahasiswa telah lulus `DAA`, `APS`, `JK`, `IMK`, `KA`, `KALJ`.
 - Rantai mundur prasyarat yang otomatis terpenuhi & di-*omit*:
-  - `APS` $\rightarrow$ `RPL` di-*omit*.
-  - `DAA` $\rightarrow$ `ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS` semuanya di-*omit*.
-  - `JK` & `IMK` $\rightarrow$ `SO` $\rightarrow$ `AOK` semuanya di-*omit*.
-  - `KALJ` & `KA` $\rightarrow$ `AL` $\rightarrow$ `KAL` semuanya di-*omit*.
+  - `APS` $\rightarrow$ `RPL` $\rightarrow$ `null` di-*omit*.
+  - `DAA` $\rightarrow$ `ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS` $\rightarrow$ `null` semuanya di-*omit*.
+  - `JK` & `IMK` $\rightarrow$ `SO` $\rightarrow$ `AOK` $\rightarrow$ `null` semuanya di-*omit*.
+  - `KALJ` & `KA` $\rightarrow$ `AL` $\rightarrow$ `KAL` $\rightarrow$ `null` semuanya di-*omit*.
 - Matakuliah semester 1 yang ditawarkan murni hanya yang belum pernah diambil dan tidak masuk rantai prasyarat di atas (`PKK`, `STP`, `AGM`).
 - Matakuliah semester 3 seperti `MN` ditawarkan karena prasyaratnya (`AL`) telah terpenuhi lewat kelulusan `KA`/`KALJ`.
