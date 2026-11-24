@@ -1,6 +1,6 @@
 # Course Enrollment Availability Checker (Sistem Rekomendasi Rencana Studi)
 
-Sistem penentu ketersediaan mata kuliah (*Course Enrollment Checker*) berbasis **Algoritma dan Struktur Data (ASD)**. Program ini menganalisis katalog mata kuliah kurikulum, ketergantungan prasyarat, serta rekam jejak akademik mahasiswa untuk menentukan mata kuliah apa saja yang memenuhi syarat (*eligible*) untuk diambil pada semester berikutnya.
+Sistem penentu ketersediaan mata kuliah (*Course Enrollment Checker*) berbasis **Algoritma dan Struktur Data (ASD)**. Program ini menganalisis katalog mata kuliah kurikulum, ketergantungan prasyarat, serta rekam jejak akademik mahasiswa untuk menentukan mata kuliah apa saja yang memenuhi syarat (*eligible*) untuk diambil pada semester berikutnya, sekaligus merinci mata kuliah yang **tidak dapat diambil beserta alasan penolakannya**.
 
 Proyek ini dibangun secara khusus dengan paradigma **murni array standar Java** (tanpa pustaka koleksi generik seperti `ArrayList`, `HashSet`, `HashMap`), menggunakan struktur data **Branched Singly Linked List (SLL)** di mana setiap node mata kuliah menyimpan pointer `prev` yang menunjuk mundur ke mata kuliah prasyaratnya.
 
@@ -35,13 +35,17 @@ Program membaca 3 berkas data yang berada dalam direktori yang sama:
   ```
 
 ### Aturan Bisnis & Logika Akademik
-1. **Filter Paritas Semester**: Hanya mata kuliah yang sesuai dengan `semester_berikutnya` (atau bertipe `Keduanya`) yang dipertimbangkan.
+1. **Filter Paritas Semester**: Hanya mata kuliah yang sesuai dengan `semester_berikutnya` (atau bertipe `Keduanya`) yang dipertimbangkan untuk dapat diambil.
 2. **Eliminasi Mata Kuliah yang Sudah Lulus**: Mata kuliah yang sudah pernah diselesaikan tidak akan ditawarkan kembali.
 3. **Penelusuran Rantai Prasyarat Mundur (*Backward Branched SLL Traversal*)**:
    - Jika mahasiswa telah lulus mata kuliah lanjutan (misalnya `DAA`), sistem mengasumsikan seluruh rantai prasyarat pendahulunya (`ASD` $\rightarrow$ `PLAN` $\rightarrow$ `PDAS`) **sudah pasti terpenuhi**.
    - Oleh karena itu, seluruh mata kuliah dalam rantai prasyarat tersebut otomatis di-*omit* (dieliminasi) agar tidak ditawarkan kembali.
 4. **Verifikasi Prasyarat Langsung**: Mata kuliah baru hanya ditawarkan apabila prasyarat langsungnya (`node.prev`) sudah berstatus lulus atau terpenuhi dalam rantai prasyarat.
 5. **Aturan Khusus Skripsi (`SKR`)**: Skripsi hanya dapat diambil jika mahasiswa telah menyelesaikan seluruh mata kuliah lain dalam kurikulum.
+6. **Kategori Penolakan Mata Kuliah (*Unavailable Reasons*)**:
+   - `"Tidak tersedia pada next semester"`: Mata kuliah tidak ditawarkan pada paritas semester berikutnya.
+   - `"Belum lulus prerequisite"`: Mata kuliah ditawarkan pada semester berikutnya, namun prasyarat langsungnya belum lulus.
+   - `"Belum menyelesaikan semua matkul"`: Khusus Skripsi (`SKR`), masih ada mata kuliah lain di kurikulum yang belum diselesaikan.
 
 ---
 
@@ -53,6 +57,7 @@ Program diimplementasikan dalam satu berkas mandiri (`Main.java`) dengan struktu
 Main.java
 ├── public class Main
 ├── class Node
+├── class UnavailableCourse
 ├── class CourseCatalog
 ├── class CsvLoader
 ├── class StudentData
@@ -66,7 +71,7 @@ Untuk memenuhi kaidah murni Struktur Data:
 - Tidak menggunakan `java.util.Set`, `java.util.HashSet`
 - Tidak menggunakan `java.util.Map`, `java.util.HashMap`
 - Tidak ada tipe parameter generik `<T>`
-- Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `String[]`, `int[]`, serta pointer objek.
+- Murni menggunakan **Array Primitif & Array Objek Standar**: `Node[]`, `UnavailableCourse[]`, `String[]`, `int[]`, serta pointer objek.
 
 ### 2. Representasi Struktur Data: Branched Singly Linked List (SLL)
 Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly Linked List (Inverted Tree)**:
@@ -84,6 +89,14 @@ Ketergantungan prasyarat antar mata kuliah dimodelkan sebagai **Branched Singly 
   - Setiap node mata kuliah memiliki tepat satu pointer `prev` yang menunjuk mundur ke prasyaratnya (atau `null` jika tidak memiliki prasyarat).
   - Beberapa mata kuliah lanjutan dapat merujuk ke satu prasyarat yang sama (misalnya `JK` dan `IMK` keduanya menunjuk ke `SO`), membentuk percabangan struktur pohon terbalik (*branched list*).
   - Penelusuran rantai prasyarat cukup dilakukan mundur melalui pointer `prev` sampai bernilai `null`.
+
+- **Pasangan Simpul & Alasan (*UnavailableCourse*)**:
+  ```java
+  class UnavailableCourse {
+      Node node;
+      String reason;
+  }
+  ```
 
 - **Katalog Terpisah (Paritas Semester)**:
   - `Node[] odd`: Menampung mata kuliah semester ganjil.
@@ -106,27 +119,16 @@ flowchart TD
     ReadStudent --> CollectPassed[Kumpulkan Matakuliah Lulus ke effectiveLulus]
     CollectPassed --> BackwardTraversal[Untuk setiap matakuliah lulus:<br/>Telusuri pointer prev mundur hingga null]
     BackwardTraversal --> MarkAncestors[Tandai seluruh rantai SLL prasyarat sebagai terpenuhi]
-    MarkAncestors --> SelectArray{semester_berikutnya?}
-    SelectArray -->|ganjil| UseOdd[Pilih odd array]
-    SelectArray -->|genap| UseEven[Pilih even array]
-    UseOdd --> ScanLoop[Loop setiap Node pada array terpilih]
-    UseEven --> ScanLoop
-    ScanLoop --> CheckPassed{Ada di effectiveLulus?}
-    CheckPassed -->|Ya| SkipCourse[Lewati / Omit]
-    CheckPassed -->|Tidak| CheckSKR{Mata kuliah SKR?}
-    CheckSKR -->|Ya| CheckAllPassed{Semua matakuliah lain sudah lulus?}
-    CheckAllPassed -->|Tidak| SkipCourse
-    CheckAllPassed -->|Ya| CheckPrereq{Punya prasyarat prev?}
-    CheckSKR -->|Tidak| CheckPrereq
-    CheckPrereq -->|Tidak| AddAvail[Masukkan ke Available]
-    CheckPrereq -->|Ya| PrereqMet{prev.kode ada di effectiveLulus?}
-    PrereqMet -->|Ya| AddAvail
-    PrereqMet -->|Tidak| SkipCourse
-    SkipCourse --> NextNode{Masih ada node?}
-    AddAvail --> NextNode
-    NextNode -->|Ya| ScanLoop
-    NextNode -->|Tidak| PrintResult[Cetak Daftar Matakuliah & Total SKS]
-    PrintResult --> End([Selesai])
+    MarkAncestors --> CheckAvailable[Evaluasi Matakuliah yang Dapat Diambil]
+    CheckAvailable --> CheckUnavailable[Evaluasi Matakuliah yang Tidak Dapat Diambil]
+    CheckUnavailable --> ClassifyReason{Penyebab Penolakan?}
+    ClassifyReason -->|SKR & belum selesai semua| Reason1["Belum menyelesaikan semua matkul"]
+    ClassifyReason -->|Bukan paritas semester target| Reason2["Tidak tersedia pada next semester"]
+    ClassifyReason -->|Prasyarat langsung belum lulus| Reason3["Belum lulus prerequisite"]
+    Reason1 --> PrintAll[Cetak Luaran Lengkap]
+    Reason2 --> PrintAll
+    Reason3 --> PrintAll
+    PrintAll --> End([Selesai])
 ```
 
 ---
@@ -180,4 +182,17 @@ Matakuliah yang dapat diambil (12):
 11. BIND   Bahasa Indonesia                           2 sks  (smt 5)
 12. PKL    Praktik Kerja Lapangan                     4 sks  (smt 7)
 Total: 31 sks
+
+Matakuliah yang tidak dapat diambil (11):
+ 1. BD     Basis Data                                 3 sks  (smt 2) - Tidak tersedia pada next semester
+ 2. MD     Matematika Diskret                         2 sks  (smt 2) - Tidak tersedia pada next semester
+ 3. EP     Etika Profesi                              2 sks  (smt 2) - Tidak tersedia pada next semester
+ 4. BING   Bahasa Inggris                             2 sks  (smt 2) - Tidak tersedia pada next semester
+ 5. PAW    Pengembangan Aplikasi Web                  3 sks  (smt 4) - Tidak tersedia pada next semester
+ 6. KI     Keamanan Informasi                         5 sks  (smt 4) - Tidak tersedia pada next semester
+ 7. PANC   Pancasila                                  2 sks  (smt 4) - Tidak tersedia pada next semester
+ 8. KWU    Kewirausahaan                              2 sks  (smt 4) - Tidak tersedia pada next semester
+ 9. KWN    Kewarganegaraan                            2 sks  (smt 4) - Tidak tersedia pada next semester
+10. CAP    Capstone Project                           3 sks  (smt 6) - Tidak tersedia pada next semester
+11. SKR    Skripsi                                    6 sks  (smt 8) - Belum menyelesaikan semua matkul
 ```

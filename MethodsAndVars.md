@@ -10,17 +10,18 @@
 ## Daftar Isi
 1. [Class: Main](#1-class-main)
 2. [Class: Node](#2-class-node)
-3. [Class: CourseCatalog](#3-class-coursecatalog)
-4. [Class: CsvLoader](#4-class-csvloader)
-5. [Class: StudentData](#5-class-studentdata)
-6. [Class: StudentFile](#6-class-studentfile)
-7. [Class: EnrollmentChecker](#7-class-enrollmentchecker)
+3. [Class: UnavailableCourse](#3-class-unavailablecourse)
+4. [Class: CourseCatalog](#4-class-coursecatalog)
+5. [Class: CsvLoader](#5-class-csvloader)
+6. [Class: StudentData](#6-class-studentdata)
+7. [Class: StudentFile](#7-class-studentfile)
+8. [Class: EnrollmentChecker](#8-class-enrollmentchecker)
 
 ---
 
 ## 1. Class: Main
 
-Kelas utama yang menjadi titik masuk (*entry point*) eksekusi program. Kelas ini bertanggung jawab atas inisialisasi path berkas, pemanggilan parser data, pemanggilan pemeriksa ketersediaan mata kuliah, serta penanganan eksepsi global.
+Kelas utama yang menjadi titik masuk (*entry point*) eksekusi program. Kelas ini bertanggung jawab atas inisialisasi path berkas, pemanggilan parser data, pemanggilan pemeriksa ketersediaan mata kuliah yang dapat diambil maupun yang tidak dapat diambil beserta alasannya, serta penanganan eksepsi global.
 
 ### Metode
 
@@ -30,7 +31,9 @@ Kelas utama yang menjadi titik masuk (*entry point*) eksekusi program. Kelas ini
   2. Memuat katalog kurikulum dan menghubungkan prasyarat via `CsvLoader.load()`.
   3. Memuat profil mahasiswa via `StudentFile.load()`.
   4. Menyaring mata kuliah yang memenuhi syarat via `EnrollmentChecker.getAvailableCourses()`.
-  5. Mencetak daftar mata kuliah dan total SKS via `EnrollmentChecker.printAvailableCourses()`.
+  5. Mencetak daftar mata kuliah yang dapat diambil via `EnrollmentChecker.printAvailableCourses()`.
+  6. Menyaring mata kuliah yang tidak dapat diambil beserta alasannya via `EnrollmentChecker.getUnavailableCourses()`.
+  7. Mencetak daftar mata kuliah yang tidak dapat diambil via `EnrollmentChecker.printUnavailableCourses()`.
 - **Parameter:**
   - `args` (`String[]`): Argumen command-line (tidak digunakan karena path diakses secara relatif).
 - **Variabel Lokal:**
@@ -40,6 +43,7 @@ Kelas utama yang menjadi titik masuk (*entry point*) eksekusi program. Kelas ini
   - `catalog` (`CourseCatalog`): Objek penampung katalog mata kuliah hasil parsing.
   - `student` (`StudentData`): Objek penampung data mahasiswa hasil parsing.
   - `available` (`Node[]`): Array berukuran eksak yang menampung daftar node mata kuliah yang dapat diambil mahasiswa.
+  - `unavailable` (`UnavailableCourse[]`): Array berukuran eksak yang menampung daftar mata kuliah yang tidak dapat diambil beserta alasan penolakannya.
   - `e` (`Exception`): Objek penangkap eksepsi jika terjadi kesalahan pembacaan berkas atau parsing.
 
 ---
@@ -68,7 +72,26 @@ Merepresentasikan simpul (*node*) individual dari suatu mata kuliah dalam strukt
 
 ---
 
-## 3. Class: CourseCatalog
+## 3. Class: UnavailableCourse
+
+Merepresentasikan pasangan antara simpul mata kuliah yang tidak dapat diambil dengan deskripsi alasan mengapa mata kuliah tersebut tidak dapat diambil.
+
+### Variabel / Atribut Kelas (Fields)
+
+- `node` (`Node`): Referensi simpul mata kuliah yang tidak dapat diambil.
+- `reason` (`String`): Alasan penolakan pengambilan mata kuliah (misal: `"Tidak tersedia pada next semester"`, `"Belum lulus prerequisite"`, `"Belum menyelesaikan semua matkul"`).
+
+### Metode
+
+#### `public UnavailableCourse(Node node, String reason)`
+- **Fungsi:** Konstruktor untuk menginisialisasi objek mata kuliah yang tidak dapat diambil beserta alasannya.
+- **Parameter:**
+  - `node` (`Node`): Simpul mata kuliah terkait.
+  - `reason` (`String`): String alasan penolakan.
+
+---
+
+## 4. Class: CourseCatalog
 
 Mengelola keseluruhan katalog mata kuliah, pemisahan paritas semester ganjil/genap, array daftar seluruh kode kurikulum, serta pencarian simpul langsung pada array.
 
@@ -107,7 +130,7 @@ Mengelola keseluruhan katalog mata kuliah, pemisahan paritas semester ganjil/gen
 
 ---
 
-## 4. Class: CsvLoader
+## 5. Class: CsvLoader
 
 Bertanggung jawab membaca dan mem-parsing berkas CSV (`matakuliah.csv` dan `prasyarat.csv`) serta menghubungkan relasi rantai prasyarat (*Branched SLL*). Menggunakan teknik **Two-Pass Scanning** agar seluruh array berukuran pas (*exact sizing*) tanpa koleksi dinamis.
 
@@ -117,7 +140,7 @@ Bertanggung jawab membaca dan mem-parsing berkas CSV (`matakuliah.csv` dan `pras
 - **Fungsi:** Mengoordinasikan pembacaan berkas kurikulum dan prasyarat:
   - **Pass 1:** Memindai `matakuliah.csv` untuk menghitung `totalCourses`, `oddCount`, dan `evenCount`.
   - **Alokasi:** Mengalokasikan array `odd`, `even`, dan `kodes` secara eksak.
-  - **Pass 2:** Membaca ulang `matakuliah.csv` untuk membuat instansiasi objek `Node` dan mengisi array.
+  - **Pass 2:** Membaca ulang `matakuliah.csv` untuk membuat instansiasi objek `Node` dan mengisinya ke array.
   - **Pass 3:** Membaca `prasyarat.csv` satu putaran untuk menghubungkan pointer `mkNode.prev = prasyaratNode`.
 - **Parameter:**
   - `matakuliahPath` (`String`): Lokasi berkas CSV katalog mata kuliah.
@@ -138,7 +161,7 @@ Bertanggung jawab membaca dan mem-parsing berkas CSV (`matakuliah.csv` dan `pras
 
 ---
 
-## 5. Class: StudentData
+## 6. Class: StudentData
 
 Struktur data penampung profil akademik dan rekam jejak kelulusan mahasiswa.
 
@@ -157,7 +180,7 @@ Struktur data penampung profil akademik dan rekam jejak kelulusan mahasiswa.
 
 ---
 
-## 6. Class: StudentFile
+## 7. Class: StudentFile
 
 Kelas pembaca dan parser berkas data profil mahasiswa (`mhs_01.txt`).
 
@@ -178,9 +201,9 @@ Kelas pembaca dan parser berkas data profil mahasiswa (`mhs_01.txt`).
 
 ---
 
-## 7. Class: EnrollmentChecker
+## 8. Class: EnrollmentChecker
 
-Komponen logika utama yang mengevaluasi kelayakan pengambilan mata kuliah menggunakan penelusuran rantai prasyarat mundur (*Backward SLL Traversal*) dan memformat tampilan luaran.
+Komponen logika utama yang mengevaluasi kelayakan pengambilan mata kuliah menggunakan penelusuran rantai prasyarat mundur (*Backward SLL Traversal*), penentuan alasan ketidaktersediaan, dan pemformatan tampilan luaran.
 
 ### Metode
 
@@ -192,51 +215,99 @@ Komponen logika utama yang mengevaluasi kelayakan pengambilan mata kuliah menggu
   - `target` (`String`): Nilai string yang dicari.
 - **Nilai Kembalian:** `true` jika string ditemukan, `false` jika tidak.
 
-#### `private static boolean isAvailable(Node node, CourseCatalog catalog, String[] effectiveLulus, int effectiveCount)`
-- **Fungsi:** Mengevaluasi apakah suatu simpul mata kuliah dapat diambil oleh mahasiswa berdasarkan 3 aturan:
-  1. Mata kuliah tidak boleh ada di `effectiveLulus` (tidak boleh ditawarkan jika sudah lulus).
-  2. **Aturan Khusus Skripsi (`SKR`):** Skripsi hanya boleh diambil jika seluruh mata kuliah kurikulum selain `SKR` sudah berstatus lulus di `effectiveLulus`.
-  3. **Aturan Prasyarat Langsung:** Jika mata kuliah memiliki `node.prev != null`, maka `node.prev.kode` wajib sudah berada di `effectiveLulus`.
+#### `private static boolean isOfferedInSemester(CourseCatalog catalog, String kode, String semesterBerikutnya)`
+- **Fungsi:** Memeriksa apakah mata kuliah dengan `kode` tertentu ditawarkan pada semester berikutnya. Memeriksa array `odd` jika target semester ganjil, atau array `even` jika target semester genap.
 - **Parameter:**
-  - `node` (`Node`): Simpul mata kuliah yang sedang dievaluasi.
-  - `catalog` (`CourseCatalog`): Objek katalog kurikulum.
-  - `effectiveLulus` (`String[]`): Array daftar mata kuliah yang berstatus lulus (termasuk rantai prasyarat mundur).
-  - `effectiveCount` (`int`): Jumlah elemen aktif di `effectiveLulus`.
-- **Nilai Kembalian:** `true` jika mata kuliah memenuhi seluruh syarat ketersediaan, `false` jika tidak.
+  - `catalog` (`CourseCatalog`): Katalog kurikulum.
+  - `kode` (`String`): Kode mata kuliah yang dicek.
+  - `semesterBerikutnya` (`String`): Target paritas semester (`"ganjil"` atau `"genap"`).
+- **Nilai Kembalian:** `true` jika mata kuliah tersedia di semester tersebut, `false` jika tidak.
 - **Variabel Lokal:**
-  - `allKodes` (`String[]`): Daftar seluruh kode mata kuliah dari katalog untuk evaluasi Skripsi.
+  - `targetArray` (`Node[]`): Array semester target (`odd` atau `even`).
+
+#### `private static String getUnavailableReason(Node node, CourseCatalog catalog, StudentData student, String[] effectiveLulus, int effectiveCount)`
+- **Fungsi:** Mengidentifikasi alasan mengapa suatu simpul mata kuliah tidak dapat diambil pada semester berikutnya:
+  1. Jika mata kuliah adalah Skripsi (`SKR`) dan ada mata kuliah lain di kurikulum yang belum diselesaikan $\rightarrow$ mengembalikan `"Belum menyelesaikan semua matkul"`.
+  2. Jika mata kuliah tidak ditawarkan pada paritas semester berikutnya $\rightarrow$ mengembalikan `"Tidak tersedia pada next semester"`.
+  3. Jika mata kuliah memiliki prasyarat (`node.prev != null`) dan prasyaratnya belum tercatat di `effectiveLulus` $\rightarrow$ mengembalikan `"Belum lulus prerequisite"`.
+  4. Jika memenuhi seluruh syarat $\rightarrow$ mengembalikan `null` (mata kuliah tersedia).
+- **Parameter:**
+  - `node` (`Node`): Simpul mata kuliah yang dievaluasi.
+  - `catalog` (`CourseCatalog`): Objek katalog kurikulum.
+  - `student` (`StudentData`): Profil mahasiswa.
+  - `effectiveLulus` (`String[]`): Array mata kuliah yang berstatus lulus (eksplisit + rantai SLL mundur).
+  - `effectiveCount` (`int`): Jumlah elemen terisi pada `effectiveLulus`.
+- **Nilai Kembalian:** `String` deskripsi alasan penolakan, atau `null` jika mata kuliah dapat diambil.
+- **Variabel Lokal:**
+  - `allKodes` (`String[]`): Daftar seluruh kode mata kuliah kurikulum untuk validasi kelulusan menyeluruh Skripsi.
+
+#### `private static boolean isAvailable(Node node, CourseCatalog catalog, StudentData student, String[] effectiveLulus, int effectiveCount)`
+- **Fungsi:** Menentukan apakah simpul mata kuliah dapat diambil. Mengembalikan `false` jika mata kuliah sudah lulus (ada di `effectiveLulus`) atau jika `getUnavailableReason` mengembalikan non-null.
+- **Parameter:**
+  - `node` (`Node`): Simpul mata kuliah yang dicek.
+  - `catalog` (`CourseCatalog`): Katalog kurikulum.
+  - `student` (`StudentData`): Profil mahasiswa.
+  - `effectiveLulus` (`String[]`): Array mata kuliah lulus.
+  - `effectiveCount` (`int`): Jumlah elemen terisi pada `effectiveLulus`.
+- **Nilai Kembalian:** `true` jika mata kuliah dapat diambil, `false` jika tidak.
 
 #### `public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student)`
-- **Fungsi:** Mengidentifikasi dan mengumpulkan seluruh mata kuliah yang dapat diambil mahasiswa:
+- **Fungsi:** Mengumpulkan seluruh mata kuliah yang dapat diambil mahasiswa pada semester berikutnya:
   1. Membentuk array `effectiveLulus` dari daftar kelulusan eksplisit mahasiswa.
-  2. **Penelusuran Rantai Prasyarat Mundur:** Untuk setiap mata kuliah yang lulus, telusuri pointer `curr = curr.prev` mundur hingga `null`, dan masukkan seluruh simpul pendahulu tersebut ke `effectiveLulus` agar otomatis di-*omit*.
+  2. Menelusuri seluruh rantai prasyarat mundur (`node.prev` mundur hingga `null`) untuk mengeliminasi mata kuliah yang sudah terpenuhi.
   3. Memilih array semester target (`odd` atau `even`).
-  4. **Pass 1:** Menghitung jumlah mata kuliah yang lolos fungsi `isAvailable()`.
-  5. **Pass 2:** Mengalokasikan array `Node[] available` dengan ukuran presisi dan mengisinya.
+  4. Menghitung jumlah mata kuliah yang memenuhi `isAvailable()`.
+  5. Mengalokasikan array `Node[] available` berukuran eksak dan mengisinya.
 - **Parameter:**
-  - `catalog` (`CourseCatalog`): Objek katalog mata kuliah kurikulum.
-  - `student` (`StudentData`): Objek profil mahasiswa.
-  - **Nilai Kembalian:** `Node[]` berukuran eksak berisikan mata kuliah yang tersedia.
+  - `catalog` (`CourseCatalog`): Objek katalog kurikulum.
+  - `student` (`StudentData`): Profil mahasiswa.
+- **Nilai Kembalian:** `Node[]` berukuran eksak berisikan mata kuliah yang dapat diambil.
 - **Variabel Lokal:**
-  - `maxCourses` (`int`): Batas kapasitas maksimum array `effectiveLulus` (diambil dari panjang array `kodes`).
-  - `effectiveLulus` (`String[]`): Array penampung seluruh kode mata kuliah yang telah diselesaikan atau dilewati prasyaratnya.
+  - `maxCourses` (`int`): Batas kapasitas array `effectiveLulus`.
+  - `effectiveLulus` (`String[]`): Array penampung seluruh kode mata kuliah yang telah diselesaikan.
   - `effectiveCount` (`int`): Penghitung jumlah elemen pada `effectiveLulus`.
-  - `k` (`String`): Variabel sementara kode mata kuliah lulus dari file mahasiswa.
+  - `k` (`String`): Kode mata kuliah sementara dari file mahasiswa.
   - `nodes` (`Node[]`): Array referensi simpul mata kuliah lulus untuk penelusuran prasyarat.
-  - `curr` (`Node`): Pointer traversal yang berjalan mundur mengikuti rantai `.prev` hingga `null`.
-  - `semesterArray` (`Node[]`): Referensi ke array paritas semester yang dituju (`odd` atau `even`).
-  - `availableCount` (`int`): Jumlah mata kuliah yang dinyatakan memenuhi syarat ketersediaan.
+  - `curr` (`Node`): Pointer penelusuran mundur mengikuti rantai `.prev` hingga `null`.
+  - `semesterArray` (`Node[]`): Referensi array semester target (`odd` atau `even`).
+  - `availableCount` (`int`): Jumlah mata kuliah yang dapat diambil.
   - `available` (`Node[]`): Array eksak penampung akhir mata kuliah yang dapat diambil.
   - `idx` (`int`): Penunjuk indeks pengisian array `available`.
 
-#### `public static void printAvailableCourses(StudentData student, Node[] available)`
-- **Fungsi:** Mencetak luaran terformat rapi ke terminal/konsol, meliputi:
-  - Header semester yang akan ditempuh.
-  - Daftar bernomor mata kuliah (kode, nama, bobot SKS, tingkat semester).
-  - Akumulasi total bobot SKS dari seluruh mata kuliah yang ditawarkan.
+#### `public static UnavailableCourse[] getUnavailableCourses(CourseCatalog catalog, StudentData student)`
+- **Fungsi:** Mengidentifikasi seluruh mata kuliah kurikulum yang belum diselesaikan namun tidak dapat diambil pada semester berikutnya beserta alasannya:
+  1. Membentuk array `effectiveLulus` secara identik (termasuk rantai SLL mundur).
+  2. Menelusuri setiap mata kuliah di kurikulum yang belum berstatus lulus (`!contains(effectiveLulus, ...)`).
+  3. Memeriksa alasan penolakan via `getUnavailableReason()`.
+  4. Menghitung jumlah mata kuliah yang ditolak, mengalokasikan array `UnavailableCourse[]` berukuran eksak, dan mengisinya.
 - **Parameter:**
-  - `student` (`StudentData`): Data mahasiswa penampung informasi semester target.
-  - `available` (`Node[]`): Array mata kuliah yang tersedia hasil evaluasi.
+  - `catalog` (`CourseCatalog`): Objek katalog kurikulum.
+  - `student` (`StudentData`): Profil mahasiswa.
+- **Nilai Kembalian:** `UnavailableCourse[]` berukuran eksak berisikan mata kuliah yang tidak dapat diambil beserta alasannya.
 - **Variabel Lokal:**
-  - `totalSks` (`int`): Variabel akumulator penjumlah bobot SKS seluruh mata kuliah yang ditawarkan.
-  - `n` (`Node`): Variabel sementara mata kuliah pada perulangan pencetakan.
+  - `maxCourses` (`int`): Batas kapasitas array `effectiveLulus`.
+  - `effectiveLulus` (`String[]`): Array penampung kode mata kuliah yang telah diselesaikan.
+  - `effectiveCount` (`int`): Penghitung jumlah elemen pada `effectiveLulus`.
+  - `allKodes` (`String[]`): Array seluruh kode mata kuliah kurikulum.
+  - `count` (`int`): Jumlah mata kuliah yang tidak dapat diambil.
+  - `kode` (`String`): Kode mata kuliah yang sedang dievaluasi.
+  - `node` (`Node`): Referensi simpul mata kuliah terkait.
+  - `reason` (`String`): Alasan penolakan pengambilan mata kuliah.
+  - `result` (`UnavailableCourse[]`): Array eksak penampung hasil evaluasi.
+  - `idx` (`int`): Penunjuk indeks pengisian array `result`.
+
+#### `public static void printAvailableCourses(StudentData student, Node[] available)`
+- **Fungsi:** Mencetak daftar bernomor mata kuliah yang dapat diambil mahasiswa beserta akumulasi total SKS.
+- **Parameter:**
+  - `student` (`StudentData`): Profil mahasiswa.
+  - `available` (`Node[]`): Daftar mata kuliah yang dapat diambil.
+- **Variabel Lokal:**
+  - `totalSks` (`int`): Akumulator total bobot SKS.
+  - `n` (`Node`): Referensi simpul mata kuliah pada perulangan pencetakan.
+
+#### `public static void printUnavailableCourses(UnavailableCourse[] unavailable)`
+- **Fungsi:** Mencetak daftar bernomor mata kuliah yang tidak dapat diambil mahasiswa beserta alasan spesifiknya.
+- **Parameter:**
+  - `unavailable` (`UnavailableCourse[]`): Daftar mata kuliah yang tidak dapat diambil beserta alasannya.
+- **Variabel Lokal:**
+  - `u` (`UnavailableCourse`): Referensi objek pasangan mata kuliah dan alasan pada perulangan pencetakan.

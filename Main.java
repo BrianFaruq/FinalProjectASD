@@ -10,8 +10,13 @@ public class Main {
         try {
             CourseCatalog catalog = CsvLoader.load(matakuliahPath, prasyaratPath);
             StudentData student = StudentFile.load(studentPath);
+
             Node[] available = EnrollmentChecker.getAvailableCourses(catalog, student);
             EnrollmentChecker.printAvailableCourses(student, available);
+
+            System.out.println();
+            UnavailableCourse[] unavailable = EnrollmentChecker.getUnavailableCourses(catalog, student);
+            EnrollmentChecker.printUnavailableCourses(unavailable);
         } catch (Exception e) {
             System.err.println("Terjadi kesalahan: " + e.getMessage());
             e.printStackTrace();
@@ -32,6 +37,16 @@ class Node {
         this.sks = sks;
         this.semester = semester;
         this.prev = null;
+    }
+}
+
+class UnavailableCourse {
+    Node node;
+    String reason;
+
+    public UnavailableCourse(Node node, String reason) {
+        this.node = node;
+        this.reason = reason;
     }
 }
 
@@ -214,25 +229,43 @@ class EnrollmentChecker {
         return false;
     }
 
-    private static boolean isAvailable(Node node, CourseCatalog catalog, String[] effectiveLulus, int effectiveCount) {
-        if (contains(effectiveLulus, effectiveCount, node.kode)) {
-            return false;
+    private static boolean isOfferedInSemester(CourseCatalog catalog, String kode, String semesterBerikutnya) {
+        Node[] targetArray = semesterBerikutnya.equals("ganjil") ? catalog.getOdd() : catalog.getEven();
+        for (int i = 0; i < targetArray.length; i++) {
+            if (targetArray[i].kode.equals(kode)) {
+                return true;
+            }
         }
+        return false;
+    }
 
+    private static String getUnavailableReason(Node node, CourseCatalog catalog, StudentData student, String[] effectiveLulus, int effectiveCount) {
         if (node.kode.equals("SKR")) {
             String[] allKodes = catalog.getKodes();
             for (int i = 0; i < allKodes.length; i++) {
                 if (!allKodes[i].equals("SKR") && !contains(effectiveLulus, effectiveCount, allKodes[i])) {
-                    return false;
+                    return "Belum menyelesaikan semua matkul";
                 }
             }
+            return null;
+        }
+
+        if (!isOfferedInSemester(catalog, node.kode, student.semesterBerikutnya)) {
+            return "Tidak tersedia pada next semester";
         }
 
         if (node.prev != null && !contains(effectiveLulus, effectiveCount, node.prev.kode)) {
-            return false;
+            return "Belum lulus prerequisite";
         }
 
-        return true;
+        return null;
+    }
+
+    private static boolean isAvailable(Node node, CourseCatalog catalog, StudentData student, String[] effectiveLulus, int effectiveCount) {
+        if (contains(effectiveLulus, effectiveCount, node.kode)) {
+            return false;
+        }
+        return getUnavailableReason(node, catalog, student, effectiveLulus, effectiveCount) == null;
     }
 
     public static Node[] getAvailableCourses(CourseCatalog catalog, StudentData student) {
@@ -264,7 +297,7 @@ class EnrollmentChecker {
 
         int availableCount = 0;
         for (int i = 0; i < semesterArray.length; i++) {
-            if (isAvailable(semesterArray[i], catalog, effectiveLulus, effectiveCount)) {
+            if (isAvailable(semesterArray[i], catalog, student, effectiveLulus, effectiveCount)) {
                 availableCount++;
             }
         }
@@ -272,12 +305,67 @@ class EnrollmentChecker {
         Node[] available = new Node[availableCount];
         int idx = 0;
         for (int i = 0; i < semesterArray.length; i++) {
-            if (isAvailable(semesterArray[i], catalog, effectiveLulus, effectiveCount)) {
+            if (isAvailable(semesterArray[i], catalog, student, effectiveLulus, effectiveCount)) {
                 available[idx++] = semesterArray[i];
             }
         }
 
         return available;
+    }
+
+    public static UnavailableCourse[] getUnavailableCourses(CourseCatalog catalog, StudentData student) {
+        int maxCourses = catalog.getKodes().length;
+        String[] effectiveLulus = new String[maxCourses];
+        int effectiveCount = 0;
+
+        for (int i = 0; i < student.lulus.length; i++) {
+            String k = student.lulus[i];
+            if (!contains(effectiveLulus, effectiveCount, k)) {
+                effectiveLulus[effectiveCount++] = k;
+            }
+        }
+
+        for (int i = 0; i < student.lulus.length; i++) {
+            Node[] nodes = catalog.getNodesByKode(student.lulus[i]);
+            for (int j = 0; j < nodes.length; j++) {
+                Node curr = nodes[j].prev;
+                while (curr != null) {
+                    if (!contains(effectiveLulus, effectiveCount, curr.kode)) {
+                        effectiveLulus[effectiveCount++] = curr.kode;
+                    }
+                    curr = curr.prev;
+                }
+            }
+        }
+
+        String[] allKodes = catalog.getKodes();
+        int count = 0;
+        for (int i = 0; i < allKodes.length; i++) {
+            String kode = allKodes[i];
+            if (contains(effectiveLulus, effectiveCount, kode)) {
+                continue;
+            }
+            Node node = catalog.getNodesByKode(kode)[0];
+            String reason = getUnavailableReason(node, catalog, student, effectiveLulus, effectiveCount);
+            if (reason != null) {
+                count++;
+            }
+        }
+
+        UnavailableCourse[] result = new UnavailableCourse[count];
+        int idx = 0;
+        for (int i = 0; i < allKodes.length; i++) {
+            String kode = allKodes[i];
+            if (contains(effectiveLulus, effectiveCount, kode)) {
+                continue;
+            }
+            Node node = catalog.getNodesByKode(kode)[0];
+            String reason = getUnavailableReason(node, catalog, student, effectiveLulus, effectiveCount);
+            if (reason != null) {
+                result[idx++] = new UnavailableCourse(node, reason);
+            }
+        }
+        return result;
     }
 
     public static void printAvailableCourses(StudentData student, Node[] available) {
@@ -292,5 +380,14 @@ class EnrollmentChecker {
                     (i + 1), n.kode, n.nama, n.sks, n.semester);
         }
         System.out.println("Total: " + totalSks + " sks");
+    }
+
+    public static void printUnavailableCourses(UnavailableCourse[] unavailable) {
+        System.out.println("Matakuliah yang tidak dapat diambil (" + unavailable.length + "):");
+        for (int i = 0; i < unavailable.length; i++) {
+            UnavailableCourse u = unavailable[i];
+            System.out.printf("%2d. %-6s %-42s %d sks  (smt %d) - %s\n",
+                    (i + 1), u.node.kode, u.node.nama, u.node.sks, u.node.semester, u.reason);
+        }
     }
 }
